@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Waste Management System | IoT Project</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: { 500: "#6366f1", 600: "#4f46e5" },
+              slate: { 950: "#0f172a" },
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              display: ["Outfit", "sans-serif"],
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 50%, #ecfdf5 100%);
+        min-height: 100vh;
+        color: #065f46;
+        font-family: "Inter", sans-serif;
+        position: relative;
+        overflow-x: hidden;
+      }
+      body::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background:
+          radial-gradient(circle at 20% 20%, rgba(16, 185, 129, 0.08), transparent 60%),
+          radial-gradient(circle at 80% 80%, rgba(5, 150, 105, 0.08), transparent 60%);
+        pointer-events: none;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.6);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.05);
+      }
+      .bin-glow { filter: drop-shadow(0 0 20px var(--glow-color)); }
+      .wave {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to top, var(--wave-color-start), var(--wave-color-end));
+        transition: height 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .wave::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        min-width: 400%;
+        min-height: 400%;
+        background: rgba(255, 255, 255, 0.25);
+        top: 0;
+        transform: translate(-50%, -97%) rotate(0);
+        border-radius: 43%;
+        animation: rotate 7s linear infinite;
+      }
+      @keyframes rotate {
+        from { transform: translate(-50%, -97%) rotate(0); }
+        to { transform: translate(-50%, -97%) rotate(360deg); }
+      }
+      .truck-day { color: white; font-weight: bold; border-radius: 0.5rem; padding: 0.25rem; font-size: 0.625rem; }
+      .truck-day.organic { background-color: #059669; }
+      .truck-day.plastic { background-color: #f59e0b; }
+      .truck-day.metal { background-color: #e11d48; }
+    </style>
+  </head>
+
+  <body class="font-sans antialiased pb-16">
+    <!-- HEADER -->
+    <header class="py-10">
+      <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
+        <div class="flex items-center gap-5">
+          <div class="bg-indigo-600 p-4 rounded-[1.5rem] shadow-xl shadow-indigo-200">
+            <i data-lucide="trash-2" class="w-10 h-10 text-white"></i>
+          </div>
+          <div>
+            <h1 class="text-4xl font-display font-bold tracking-tight text-slate-900">Waste Management</h1>
+            <p class="text-indigo-600/60 font-bold tracking-[0.2em] text-[10px] uppercase mt-1">University IoT Project • Final Year</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 md:gap-10 glass-card px-8 py-4 rounded-[2rem] border-white/50">
+          <div class="flex flex-col items-end border-r border-slate-200/60 pr-8">
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">System Health</span>
+            <div class="flex items-center gap-2">
+              <span class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.4)]"></span>
+              <span class="text-sm font-bold text-slate-700">All Sensors Online</span>
+            </div>
+          </div>
+          <div class="flex flex-col items-start min-w-[120px]">
+            <span id="lastUpdate" class="text-xl font-display font-bold text-indigo-600">--:--:--</span>
+            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Active Sequence</span>
+          </div>
+          <button id="alarmToggle" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Alarm ON</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="max-w-6xl mx-auto space-y-10">
+      <!-- OVERVIEW -->
+      <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="glass-card rounded-[2.5rem] p-6 lg:p-8 flex items-center gap-4 lg:gap-6">
+          <div class="p-4 bg-indigo-50 rounded-2xl">
+            <i data-lucide="bar-chart-3" class="w-6 h-6 lg:w-8 lg:h-8 text-indigo-500"></i>
+          </div>
+          <div>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Avg Load</p>
+            <div class="flex items-baseline gap-2">
+              <span id="avgFillLevel" class="text-2xl lg:text-3xl font-display font-bold text-slate-900">0.0%</span>
+            </div>
+          </div>
+        </div>
+        <div class="glass-card rounded-[2.5rem] p-6 lg:p-8 flex items-center gap-4 lg:gap-6">
+          <div class="p-4 bg-amber-50 rounded-2xl">
+            <i data-lucide="layers" class="w-6 h-6 lg:w-8 lg:h-8 text-amber-500"></i>
+          </div>
+          <div class="flex-1 overflow-hidden">
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Priority</p>
+            <div id="priorityList" class="flex flex-col gap-0.5">
+              <span class="text-slate-400 text-xs italic">Awaiting Telemetry...</span>
+            </div>
+          </div>
+        </div>
+        <div class="glass-card rounded-[2.5rem] p-6 lg:p-8 flex items-center gap-4 lg:gap-6">
+          <div class="p-4 bg-rose-50 rounded-2xl">
+            <i data-lucide="alert-circle" class="w-6 h-6 lg:w-8 lg:h-8 text-rose-500"></i>
+          </div>
+          <div>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Alerts</p>
+            <p id="alertSummary" class="text-lg lg:text-xl font-display font-bold text-slate-800">Clear</p>
+          </div>
+        </div>
+        <div class="glass-card rounded-[2.5rem] p-6 lg:p-8 flex items-center gap-4 lg:gap-6">
+          <div class="p-4 bg-emerald-50 rounded-2xl">
+            <i data-lucide="cpu" class="w-6 h-6 lg:w-8 lg:h-8 text-emerald-500"></i>
+          </div>
+          <div>
+            <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1">Nodes</p>
+            <p class="text-lg lg:text-xl font-display font-bold text-slate-800">1 Online</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- TELEMETRY & CHARTS -->
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        <div class="lg:col-span-6 glass-card rounded-[3.5rem] p-9 relative overflow-hidden flex flex-col h-[450px]">
+          <div class="flex justify-between items-start mb-6">
+            <div>
+              <h2 class="text-2xl font-display font-bold text-slate-900">Live Telemetry</h2>
+              <p class="text-slate-500 text-sm">Real-time bin density distribution</p>
+            </div>
+            <span class="px-4 py-1.5 bg-white border border-slate-100 rounded-full text-[10px] font-bold text-indigo-500 uppercase tracking-widest shadow-sm">Grid 1-A</span>
+          </div>
+          <div id="binsContainer" class="flex-1 flex justify-center items-end gap-6"></div>
+        </div>
+
+        <div class="lg:col-span-6 glass-card rounded-[3.5rem] p-9 flex flex-col h-[450px] overflow-hidden">
+          <div class="flex justify-between items-center mb-10">
+            <h2 class="text-2xl font-display font-bold text-slate-900">Density Patterns</h2>
+            <div class="flex items-center gap-2 px-3 py-1 bg-indigo-50 rounded-lg">
+              <div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+              <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-tighter">Live Feed</span>
+            </div>
+          </div>
+          <div class="flex-1 w-full relative min-h-0">
+            <canvas id="fillChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- WEEKLY CHARTS -->
+      <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass-card rounded-[3rem] p-6 flex flex-col items-center">
+          <h3 class="text-lg font-display font-bold text-slate-900 mb-4">Organic Waste</h3>
+          <canvas id="weeklyOrganicChart" class="w-full h-48"></canvas>
+          <span id="organicTotal" class="mt-2 text-sm font-bold text-slate-700">Total: 0 kg</span>
+        </div>
+        <div class="glass-card rounded-[3rem] p-6 flex flex-col items-center">
+          <h3 class="text-lg font-display font-bold text-slate-900 mb-4">Plastic Waste</h3>
+          <canvas id="weeklyPlasticChart" class="w-full h-48"></canvas>
+          <span id="plasticTotal" class="mt-2 text-sm font-bold text-slate-700">Total: 0 kg</span>
+        </div>
+        <div class="glass-card rounded-[3rem] p-6 flex flex-col items-center">
+          <h3 class="text-lg font-display font-bold text-slate-900 mb-4">Metal Waste</h3>
+          <canvas id="weeklyMetalChart" class="w-full h-48"></canvas>
+          <span id="metalTotal" class="mt-2 text-sm font-bold text-slate-700">Total: 0 kg</span>
+        </div>
+      </section>
+
+      <!-- CALENDAR -->
+      <section class="glass-card p-6 rounded-[2.5rem] max-w-6xl mx-auto mt-10">
+        <h2 class="text-xl font-display font-bold text-slate-900 mb-4 text-center">Waste Truck Schedule</h2>
+        <div id="calendar" class="grid grid-cols-7 gap-2 text-center"></div>
+      </section>
+
+      <!-- FOOTER -->
+      <footer class="mt-20 pt-10 border-t border-slate-200/60 pb-10">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-8">
+          <div class="flex items-center gap-4">
+            <div class="p-3 bg-slate-100 rounded-xl">
+              <i data-lucide="users" class="w-5 h-5 text-slate-500"></i>
+            </div>
+            <div>
+              <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest">Project Development Group</p>
+              <p class="text-xs font-bold text-slate-600 mt-0.5">IoT 4th Year - Semester 1</p>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-16">
+            <div class="text-center md:text-right">
+              <p class="text-sm font-display font-bold text-slate-800">Chamathvi Kawya</p>
+              <p class="text-[9px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1.5 opacity-80">ID: 22UG2-0193</p>
+            </div>
+            <div class="text-center md:text-right">
+              <p class="text-sm font-display font-bold text-slate-800">Chamika Raigama</p>
+              <p class="text-[9px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1.5 opacity-80">ID: 22UG2-0567</p>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      <!-- ALARM SOUND WITH USER INTERACTION -->
+<button id="enableSound" style="display:none;"></button>
+<audio id="alarmSound" src="beep.mp3" preload="auto"></audio>
+    </main>
+
+    <!-- FIREBASE + JS -->
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyCIdpKXJsAhzcEC_ENQkSyz0Lww57ATiTM",
+        authDomain: "swm-system-6b210.firebaseapp.com",
+        databaseURL: "https://swm-system-6b210-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "swm-system-6b210",
+        storageBucket: "swm-system-6b210.firebasestorage.app",
+        messagingSenderId: "235241792176",
+        appId: "1:235241792176:web:c74bc59eadadbcafdc1175",
+      };
+      const app = firebase.initializeApp(firebaseConfig);
+      const db = firebase.database(app);
+
+      lucide.createIcons();
+
+      let organicTotalKg = 0;
+      let previousKg = 0;
+      let alarmEnabled = true;
+      const alarm = document.getElementById("alarmSound");
+      const alarmButton = document.getElementById("alarmToggle");
+      const alertEl = document.getElementById("alertSummary");
+
+      // ALARM HANDLERS
+      let alarmLooping = false;
+      function startAlarm() { if (!alarmEnabled) return; if (!alarmLooping) { alarmLooping = true; alarm.loop = true; alarm.play().catch(() => console.log("User interaction required")); } }
+      function stopAlarm() { if (alarmLooping) { alarmLooping = false; alarm.pause(); alarm.currentTime = 0; } }
+
+      alarmButton.addEventListener("click", () => {
+        alarmEnabled = !alarmEnabled;
+        alarmButton.innerText = alarmEnabled ? "Alarm ON" : "Alarm OFF";
+        if (!alarmEnabled) stopAlarm();
+      });
+
+      // Render, Priority, Stats
+      function renderBins(nodes) {
+        const container = document.getElementById("binsContainer");
+        container.innerHTML = "";
+        nodes.forEach((node) => {
+          const value = node.fill_level;
+          const isActive = node.type === "active";
+          let colors = { start: "#d1d5db", end: "#9ca3af", glow: "transparent" };
+          if (node.bin_id === "Organic") colors = { start: "#FFFFFF", end: "#059669", glow: "rgba(16,185,129,0.25)" };
+          if (node.bin_id === "Plastic") colors = { start: "#FFFFFF", end: "#f59e0b", glow: "rgba(245,158,11,0.25)" };
+          if (node.bin_id === "Metal") colors = { start: "#FFFFFF", end: "#e11d48", glow: "rgba(244,63,94,0.25)" };
+
+          container.innerHTML += `
+            <div class="flex flex-col items-center group transition-all duration-700 ${!isActive ? "opacity-30" : ""}">
+              <div class="relative w-28 h-56 bg-white border-[4px] border-white rounded-[1.5rem] overflow-hidden shadow-2xl ring-1 ring-slate-100 bin-glow transition-all duration-500" style="--glow-color: ${colors.glow}">
+                ${isActive ? `<div class="wave" style="height:${value}%; --wave-color-start:${colors.start}; --wave-color-end:${colors.end}"></div>` : ""}
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  ${isActive ? `<span class="text-4xl font-display font-bold text-slate-900 drop-shadow-sm">${value.toFixed(0)}</span><span class="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-500/80">Percent</span>` : `<i data-lucide="shield-off" class="w-8 h-8 text-slate-200 mb-2"></i><span class="text-[8px] font-bold uppercase tracking-widest text-slate-300">Offline</span>`}
+                </div>
+              </div>
+              <div class="mt-6 text-center"><p class="text-lg font-display font-bold text-slate-900 tracking-tight">${node.bin_id}</p></div>
+            </div>`;
+        });
+        lucide.createIcons();
+      }
+
+      function updatePriority(data) {
+        const container = document.getElementById("priorityList");
+        container.innerHTML = "";
+        data.forEach(bin => {
+          const isCritical = bin.fill_level > 80;
+          container.innerHTML += `<div class="flex items-center justify-between"><span class="text-xs font-bold text-slate-700">${bin.bin_id}</span><span class="text-xs font-bold ${isCritical ? "text-rose-500" : "text-indigo-600"}">${bin.fill_level.toFixed(0)}%</span></div>`;
+        });
+      }
+
+      function updateStats(bins) {
+        const avgFill = bins.reduce((acc, b) => acc + b.fill_level, 0) / bins.length;
+        document.getElementById("avgFillLevel").innerText = `${avgFill.toFixed(1)}%`;
+      }
+
+      // CHARTS
+      let liveLabels = [], liveValues = [], chart;
+      function createChart(labels, values) {
+        const ctx = document.getElementById("fillChart").getContext("2d");
+        const gradient = ctx.createLinearGradient(0,0,0,400);
+        gradient.addColorStop(0, "rgba(99,102,241,0.15)");
+        gradient.addColorStop(1, "rgba(99,102,241,0)");
+        chart = new Chart(ctx, {
+          type: "line",
+          data: { labels, datasets:[{ data: values, borderColor:"#6366f1", borderWidth:6, fill:true, backgroundColor:gradient, pointBackgroundColor:"#fff", pointBorderColor:"#6366f1", pointBorderWidth:3, pointRadius:0, pointHoverRadius:6 }] },
+          options: { responsive:true, plugins:{ legend:{ display:false }}, interaction:{intersect:false, mode:"index"}, scales:{x:{display:false}, y:{min:0,max:100}} }
+        });
+      }
+
+      function createWeeklyChart(ctx, color) {
+        return new Chart(ctx, {
+          type:"bar",
+          data:{ labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], datasets:[{label:"Waste (kg)",data:[0,0,0,0,0,0,0], backgroundColor: color, borderRadius:6}] },
+          options:{ responsive:true, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true,max:20},x:{grid:{display:false}}} }
+        });
+      }
+
+      const organicChart = createWeeklyChart(document.getElementById("weeklyOrganicChart").getContext("2d"), "rgba(34,197,94,0.7)");
+      const plasticChart = createWeeklyChart(document.getElementById("weeklyPlasticChart").getContext("2d"), "rgba(245,158,11,0.7)");
+      const metalChart = createWeeklyChart(document.getElementById("weeklyMetalChart").getContext("2d"), "rgba(239,68,68,0.7)");
+
+      const organicTotalEl = document.getElementById("organicTotal");
+
+      // FIREBASE LISTENER
+      const ref = db.ref("dustbin");
+      ref.on("value", snapshot => {
+        const data = snapshot.val() || {};
+        const organicFill = parseFloat(data.filled_percentage || 0);
+
+        const bins = [
+          {bin_id:"Organic", fill_level:organicFill, type:"active", timestamp:Date.now()},
+          {bin_id:"Plastic", fill_level:0, type:"empty", timestamp:Date.now()},
+          {bin_id:"Metal", fill_level:0, type:"empty", timestamp:Date.now()},
+        ];
+
+        // ALERTS
+        if (organicFill > 90) { alertEl.innerText="🚨 Bin Critically Full!"; startAlarm(); }
+        else if (organicFill > 80) { alertEl.innerText="⚠️ Bin Full!"; startAlarm(); }
+        else { alertEl.innerText="All Clear"; stopAlarm(); }
+
+        renderBins(bins);
+        updatePriority(bins);
+        updateStats(bins);
+
+        liveLabels.push(new Date().toLocaleTimeString());
+        liveValues.push(organicFill);
+        if (liveLabels.length>20){ liveLabels.shift(); liveValues.shift(); }
+        if(!chart) createChart(liveLabels,liveValues);
+        else { chart.data.labels=liveLabels; chart.data.datasets[0].data=liveValues; chart.update(); }
+
+        const maxKg = 16;
+        const kg = (organicFill/100)*maxKg;
+        if (kg > previousKg) { organicTotalKg += kg-previousKg; previousKg=kg; }
+        organicChart.data.datasets[0].data[1] = kg;
+        organicChart.update();
+        organicTotalEl.innerText = `Total: ${organicTotalKg.toFixed(1)} kg`;
+
+        document.getElementById("lastUpdate").innerText = new Date().toLocaleTimeString();
+      });
+
+      // CALENDAR
+      const truckSchedule = {
+        "2026-03-10": ["Organic","Plastic"],
+        "2026-03-12": ["Metal"],
+        "2026-03-14": ["Plastic","Metal"],
+        "2026-03-15": ["Organic"]
+      };
+      function renderCalendar() {
+        const cal = document.getElementById("calendar"); cal.innerHTML="";
+        const today = new Date();
+        for(let i=0;i<14;i++){
+          const date = new Date(today.getFullYear(),today.getMonth(),today.getDate()+i);
+          const dateStr = date.toISOString().split("T")[0];
+          const day = date.getDate();
+          const dayEl = document.createElement("div");
+          dayEl.className="p-2 border rounded";
+          if(truckSchedule[dateStr]){
+            dayEl.innerHTML=`<div class="text-sm font-bold">${day}</div>` + truckSchedule[dateStr].map(bin => `<div class="truck-day ${bin.toLowerCase()} mt-1">${bin}</div>`).join("");
+          } else { dayEl.innerHTML=`<div class="text-sm font-bold">${day}</div>`; }
+          cal.appendChild(dayEl);
+        }
+      }
+      renderCalendar();
+    </script>
+  </body>
+</html>

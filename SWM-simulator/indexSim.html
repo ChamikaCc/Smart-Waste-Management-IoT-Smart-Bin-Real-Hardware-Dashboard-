@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Smart Waste Management System | 3-Bin Simulation</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  background: linear-gradient(135deg,#d1fae5 0%,#a7f3d0 50%,#ecfdf5 100%);
+  min-height:100vh;
+  font-family: 'Inter', sans-serif;
+  position: relative;
+  overflow-x:hidden;
+  color:#065f46;
+}
+body::before {
+  content:"";
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  background: radial-gradient(circle at 20% 20%, rgba(16,185,129,0.08), transparent 60%),
+             radial-gradient(circle at 80% 80%, rgba(5,150,105,0.08), transparent 60%);
+  pointer-events:none;
+}
+.glass-card {
+  background: rgba(255,255,255,0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border:1px solid rgba(255,255,255,0.8);
+  box-shadow:0 10px 20px -10px rgba(0,0,0,0.05);
+}
+.bin-glow { filter: drop-shadow(0 0 15px var(--glow-color)); }
+.wave {
+  position:absolute; bottom:0; left:0; width:100%; height:100%;
+  background: linear-gradient(to top, var(--wave-color-start), var(--wave-color-end));
+  transition:height 1s cubic-bezier(0.4,0,0.2,1);
+}
+.wave::after {
+  content:""; position:absolute; left:50%; min-width:400%; min-height:400%;
+  background: rgba(255,255,255,0.25); top:0;
+  transform: translate(-50%,-97%) rotate(0);
+  border-radius:43%; animation: rotate 7s linear infinite;
+}
+@keyframes rotate {
+  from { transform: translate(-50%,-97%) rotate(0); }
+  to { transform: translate(-50%,-97%) rotate(360deg); }
+}
+.truck-day { 
+  background-color: #059669; 
+  color: white; 
+  font-weight: bold; 
+  border-radius: 0.5rem; 
+  padding: 0.25rem;
+  font-size: 0.625rem; /* 8px */
+}
+.truck-day.organic { background-color: #059669; }
+.truck-day.plastic { background-color: #f59e0b; }
+.truck-day.metal { background-color: #e11d48; }
+</style>
+</head>
+<body class="pb-16">
+
+<header class="py-6">
+<div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+
+<div class="flex items-center gap-4">
+  <div class="bg-indigo-600 p-3 rounded-[1rem] shadow-xl shadow-indigo-200">
+    <i data-lucide="trash-2" class="w-8 h-8 text-white"></i>
+  </div>
+  <div>
+    <h1 class="text-2xl md:text-3xl font-display font-bold tracking-tight text-slate-900">
+      Waste Management 3-Bin Simulation
+    </h1>
+    <p class="text-indigo-600/60 font-bold tracking-[0.1em] text-[9px] uppercase mt-1">
+      University IoT Project • Final Year
+    </p>
+  </div>
+</div>
+
+<div class="flex items-center gap-3 md:gap-6 glass-card px-6 py-3 rounded-[1.5rem] border-white/50 text-sm">
+  <div class="flex flex-col items-end border-r border-slate-200/60 pr-4">
+    <span class="text-[8px] text-slate-400 font-bold uppercase tracking-widest mb-1">System Health</span>
+    <div class="flex items-center gap-2">
+      <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></span>
+      <span class="text-xs font-bold text-slate-700">All Sensors Online</span>
+    </div>
+  </div>
+  <div class="flex flex-col items-start min-w-[100px]">
+    <span id="lastUpdate" class="text-lg font-display font-bold text-indigo-600">--:--:--</span>
+    <span class="text-[8px] text-slate-400 font-bold uppercase tracking-widest">Active Sequence</span>
+  </div>
+  <button id="alarmToggle" class="bg-indigo-600 text-white px-3 py-1 rounded-md text-xs">Alarm ON</button>
+</div>
+
+</div>
+</header>
+
+<main class="max-w-6xl mx-auto space-y-6">
+
+<!-- Top Stats -->
+<section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="glass-card rounded-[2rem] p-4 flex items-center gap-3">
+    <div class="p-3 bg-indigo-50 rounded-xl">
+      <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-500"></i>
+    </div>
+    <div>
+      <p class="text-slate-400 text-[8px] font-bold uppercase tracking-widest mb-1">Avg Load</p>
+      <div class="flex items-baseline gap-1">
+        <span id="avgFillLevel" class="text-xl font-display font-bold text-slate-900">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-card rounded-[2rem] p-4 flex items-center gap-3">
+    <div class="p-3 bg-amber-50 rounded-xl">
+      <i data-lucide="layers" class="w-5 h-5 text-amber-500"></i>
+    </div>
+    <div class="flex-1 overflow-hidden">
+      <p class="text-slate-400 text-[8px] font-bold uppercase tracking-widest mb-1">Priority</p>
+      <div id="priorityList" class="flex flex-col gap-0.5">
+        <span class="text-slate-400 text-[9px] italic">Awaiting Telemetry...</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-card rounded-[2rem] p-4 flex items-center gap-3">
+    <div class="p-3 bg-rose-50 rounded-xl">
+      <i data-lucide="alert-circle" class="w-5 h-5 text-rose-500"></i>
+    </div>
+    <div>
+      <p class="text-slate-400 text-[8px] font-bold uppercase tracking-widest mb-1">Alerts</p>
+      <p id="alertSummary" class="text-base font-display font-bold text-slate-800">Clear</p>
+    </div>
+  </div>
+
+  <div class="glass-card rounded-[2rem] p-4 flex items-center gap-3">
+    <div class="p-3 bg-emerald-50 rounded-xl">
+      <i data-lucide="cpu" class="w-5 h-5 text-emerald-500"></i>
+    </div>
+    <div>
+      <p class="text-slate-400 text-[8px] font-bold uppercase tracking-widest mb-1">Nodes</p>
+      <p class="text-base font-display font-bold text-slate-800"> Online</p>
+    </div>
+  </div>
+</section>
+
+<!-- Telemetry & Line Chart -->
+<section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+  <div class="lg:col-span-6 glass-card rounded-[2.5rem] p-6 relative overflow-hidden flex flex-col h-[350px]">
+    <div class="flex justify-between items-start mb-4">
+      <div>
+        <h2 class="text-xl font-display font-bold text-slate-900">Live Telemetry</h2>
+        <p class="text-slate-500 text-sm">Simulated bin density</p>
+      </div>
+    </div>
+    <div id="binsContainer" class="flex-1 flex justify-center items-end gap-4"></div>
+  </div>
+
+  <div class="lg:col-span-6 glass-card rounded-[2.5rem] p-6 flex flex-col h-[350px] overflow-hidden">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-xl font-display font-bold text-slate-900">Density Patterns</h2>
+      <div class="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 rounded-md">
+        <div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></div>
+        <span class="text-[8px] font-bold text-indigo-600 uppercase tracking-tighter">Live Feed</span>
+      </div>
+    </div>
+    <div class="flex-1 w-full relative min-h-0">
+      <canvas id="fillChart"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- Weekly Bar Charts -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <div class="glass-card p-4 rounded-[2rem]">
+    <h3 class="text-lg font-display font-bold text-slate-900 mb-2 text-center">Organic Weekly</h3>
+    <canvas id="organicWeekChart" class="h-32"></canvas>
+  </div>
+  <div class="glass-card p-4 rounded-[2rem]">
+    <h3 class="text-lg font-display font-bold text-slate-900 mb-2 text-center">Plastic Weekly</h3>
+    <canvas id="plasticWeekChart" class="h-32"></canvas>
+  </div>
+  <div class="glass-card p-4 rounded-[2rem]">
+    <h3 class="text-lg font-display font-bold text-slate-900 mb-2 text-center">Metal Weekly</h3>
+    <canvas id="metalWeekChart" class="h-32"></canvas>
+  </div>
+</section>
+
+<!-- Waste Truck Schedule Calendar -->
+<section class="glass-card p-6 rounded-[2.5rem] max-w-6xl mx-auto">
+  <h2 class="text-xl font-display font-bold text-slate-900 mb-4 text-center">Waste Truck Schedule</h2>
+  <div id="calendar" class="grid grid-cols-7 gap-2 text-center"></div>
+</section>
+
+<!-- Audio for alarm -->
+<audio id="alarmSound" src="beep.mp3" preload="auto"></audio>
+
+<script>
+const truckSchedule = {
+  "2026-03-10": ["Organic", "Plastic"],
+  "2026-03-12": ["Metal"],
+  "2026-03-14": ["Plastic", "Metal"],
+  "2026-03-15": ["Organic"]
+};
+
+function renderCalendar() {
+  const calendarEl = document.getElementById("calendar");
+  calendarEl.innerHTML = "";
+
+  const today = new Date();
+  for(let i=0; i<14; i++){
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate()+i);
+    const dateStr = date.toISOString().split("T")[0]; // YYYY-MM-DD
+    const day = date.getDate();
+
+    const dayEl = document.createElement("div");
+    dayEl.className = "p-2 border rounded";
+
+    if(truckSchedule[dateStr]){
+      dayEl.innerHTML = `<div class="text-sm font-bold">${day}</div>` + 
+        truckSchedule[dateStr].map(bin => 
+          `<div class="truck-day ${bin.toLowerCase()} mt-1">${bin}</div>`).join("");
+    } else {
+      dayEl.innerHTML = `<div class="text-sm font-bold">${day}</div>`;
+    }
+
+    calendarEl.appendChild(dayEl);
+  }
+}
+
+renderCalendar();
+lucide.createIcons();
+</script>
+
+<script>
+// Alarm toggle
+const alarm = document.getElementById("alarmSound");
+const alarmButton = document.getElementById("alarmToggle");
+let alarmEnabled = true;
+alarmButton.addEventListener("click", ()=>{
+  alarmEnabled=!alarmEnabled;
+  alarmButton.innerText = alarmEnabled?"Alarm ON":"Alarm OFF";
+  if(!alarmEnabled){ alarm.pause(); alarm.currentTime=0; }
+});
+
+// Line Chart
+let chart;
+const chartLabels=[], chartValuesOrganic=[], chartValuesPlastic=[], chartValuesMetal=[];
+function createChart(labels, org, pla, met){
+  const ctx=document.getElementById("fillChart").getContext("2d");
+  chart=new Chart(ctx,{
+    type:"line",
+    data:{labels:labels,datasets:[
+      {label:"Organic", data:org, borderColor:"#059669", backgroundColor:"rgba(5,150,105,0.15)", fill:true},
+      {label:"Plastic", data:pla, borderColor:"#f59e0b", backgroundColor:"rgba(245,158,11,0.15)", fill:true},
+      {label:"Metal", data:met, borderColor:"#e11d48", backgroundColor:"rgba(241,63,94,0.15)", fill:true}
+    ]},
+    options:{responsive:true, plugins:{legend:{display:true}}, scales:{y:{max:100,min:0}, x:{display:false}}}
+  });
+}
+
+// Weekly Bar Charts
+const weekLabels=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const organicWeekData = [50, 0, 0, 0, 0, 0, 0]; 
+const plasticWeekData = [30, 0, 0, 0, 0, 0, 0]; 
+const metalWeekData = [20, 0, 0, 0, 0, 0, 0]; 
+
+const organicWeekChart=new Chart(document.getElementById("organicWeekChart"),{
+  type:"bar",
+  data:{labels:weekLabels,datasets:[{label:"Organic", data:organicWeekData, backgroundColor:"#059669"}]},
+  options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{max:100,min:0}}}
+});
+
+const plasticWeekChart=new Chart(document.getElementById("plasticWeekChart"),{
+  type:"bar",
+  data:{labels:weekLabels,datasets:[{label:"Plastic", data:plasticWeekData, backgroundColor:"#f59e0b"}]},
+  options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{max:100,min:0}}}
+});
+
+const metalWeekChart=new Chart(document.getElementById("metalWeekChart"),{
+  type:"bar",
+  data:{labels:weekLabels,datasets:[{label:"Metal", data:metalWeekData, backgroundColor:"#e11d48"}]},
+  options:{responsive:true, plugins:{legend:{display:false}}, scales:{y:{max:100,min:0}}}
+});
+
+// Simulated bins
+const bins = [
+  { bin_id: "Organic", fill_level: 0, start: "#FFFFFF", end: "#059669", glow: "rgba(16,185,129,0.25)" },
+  { bin_id: "Plastic", fill_level: 0, start: "#FFFFFF", end: "#f59e0b", glow: "rgba(245,158,11,0.25)" },
+  { bin_id: "Metal", fill_level: 0, start: "#FFFFFF", end: "#e11d48", glow: "rgba(244,63,94,0.25)" }
+];
+
+function randomIncrement(value){ return Math.min(100,value+Math.random()*10); }
+
+function renderBins(){
+  const container=document.getElementById("binsContainer");
+  container.innerHTML="";
+  bins.forEach(bin=>{
+    bin.fill_level=randomIncrement(bin.fill_level);
+    const card=`<div class="flex flex-col items-center">
+      <div class="relative w-32 h-40  bg-white border-[4px] border-white rounded-[1.5rem] overflow-hidden shadow-2xl ring-1 ring-slate-100 bin-glow" style="--glow-color:${bin.glow}"> <div class="wave" style="height:${bin.fill_level}%; --wave-color-start:${bin.start}; --wave-color-end:${bin.end}"></div>
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span class="text-3xl font-display font-bold text-slate-900 drop-shadow-sm">${bin.fill_level.toFixed(0)}</span>
+          <span class="text-[7px] font-bold uppercase tracking-[0.15em] text-slate-500/80">Percent</span>
+        </div>
+      </div>
+      <div class="mt-3 text-center">
+        <p class="text-base font-display font-bold text-slate-900 tracking-tight">${bin.bin_id}</p>
+      </div>
+    </div>`;
+    container.innerHTML+=card;
+  });
+  lucide.createIcons();
+}
+
+function updatePriorityAndAlerts(){
+  const container=document.getElementById("priorityList");
+  container.innerHTML="";
+  let alerts=[];
+  bins.forEach(bin=>{
+    const critical=bin.fill_level>80;
+    container.innerHTML+=`<div class="flex items-center justify-between"><span class="text-[9px] font-bold text-slate-700">${bin.bin_id}</span><span class="text-[9px] font-bold ${critical?"text-rose-500":"text-indigo-600"}">${bin.fill_level.toFixed(0)}%</span></div>`;
+    if(critical) alerts.push(bin.bin_id);
+  });
+  const alertEl=document.getElementById("alertSummary");
+  if(alerts.length>0){ alertEl.innerText=`⚠️ ${alerts.join(", ")} Bin(s) Full!`; if(alarmEnabled) alarm.play();}
+  else{ alertEl.innerText="All Clear"; alarm.pause(); alarm.currentTime=0; }
+}
+
+function updateChart(){
+  chartLabels.push(new Date().toLocaleTimeString());
+  chartValuesOrganic.push(bins[0].fill_level);
+  chartValuesPlastic.push(bins[1].fill_level);
+  chartValuesMetal.push(bins[2].fill_level);
+  if(chartLabels.length>20){ chartLabels.shift(); chartValuesOrganic.shift(); chartValuesPlastic.shift(); chartValuesMetal.shift(); }
+  if(!chart) createChart(chartLabels,chartValuesOrganic,chartValuesPlastic,chartValuesMetal);
+  else{
+    chart.data.labels=chartLabels;
+    chart.data.datasets[0].data=chartValuesOrganic;
+    chart.data.datasets[1].data=chartValuesPlastic;
+    chart.data.datasets[2].data=chartValuesMetal;
+    chart.update();
+  }
+
+  let todayIndex = new Date().getDay() - 1;
+  if(todayIndex < 0) todayIndex = 6;
+
+  organicWeekData[todayIndex] = Math.floor(bins[0].fill_level);
+  plasticWeekData[todayIndex] = Math.floor(bins[1].fill_level);
+  metalWeekData[todayIndex] = Math.floor(bins[2].fill_level);
+
+  organicWeekChart.update();
+  plasticWeekChart.update();
+  metalWeekChart.update();
+
+  document.getElementById("lastUpdate").innerText=new Date().toLocaleTimeString();
+  document.getElementById("avgFillLevel").innerText=((bins[0].fill_level+bins[1].fill_level+bins[2].fill_level)/3).toFixed(1)+"%";
+}
+
+setInterval(()=>{
+  renderBins();
+  updatePriorityAndAlerts();
+  updateChart();
+},2000);
+</script>
+
+</body>
+</html>
