@@ -184,36 +184,5 @@ This lets you validate firmware logic and Firebase integration without any physi
 
 ---
 
-## 🚀 Deployment (GitHub Pages)
 
-The dashboard is a static web app and can be hosted for free on **GitHub Pages**.
-
-**Steps:**
-1. Open your repository on GitHub
-2. Go to **Settings → Pages**
-3. Under *Branch*, select `main` and click **Save**
-4. Your dashboard will be live at:
-
-```
-https://<your-username>.github.io/Smart-Waste-Management-IoT-Smart-Bin-Real-Hardware-Dashboard-/
-```
-
----
-
-## 🔒 Security Recommendations
-
-This project exposes Firebase configuration in the client-side dashboard. For a **production deployment**, apply the following hardening steps:
-
-- [ ] Restrict Firebase Realtime Database rules to read-only for unauthenticated users
-- [ ] Enable Firebase Authentication and require login for write access
-- [ ] Move sensitive keys to environment variables or a backend proxy
-- [ ] Avoid committing API keys or database secrets to public repositories
-
----
-
-## 📄 License
-
-This project is open-source. Feel free to use, modify, and distribute it with attribution.
-
----
 
