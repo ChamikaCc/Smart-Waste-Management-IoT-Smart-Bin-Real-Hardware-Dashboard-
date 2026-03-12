@@ -417,7 +417,6 @@ body::before {
           messagingSenderId: "YOUR_SENDER_ID",
           appId: "YOUR_APP_ID",
       };
-      };
 
       const app = firebase.initializeApp(firebaseConfig);
       const db = firebase.database(app); // ← IMPORTANT
